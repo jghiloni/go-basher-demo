@@ -9,4 +9,18 @@ function capitalize() {
   done
 }
 
-[[ "${BASH_SOURCE[0]}" == "${0}" ]] && capitalize "$@"
+function testSpies() {
+  echo $PATH
+  cf version
+  cf push "$@"
+}
+
+function testStub() {
+  false
+}
+
+function testMocks() {
+  cf help
+  bosh --version
+  bosh envs
+}

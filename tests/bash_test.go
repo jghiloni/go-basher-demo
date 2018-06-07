@@ -7,14 +7,17 @@ import (
 	"testing"
 
 	"github.com/progrium/go-basher"
-	"github.com/sclevine/spec"
 
-	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gbytes"
+	"github.com/sclevine/spec"
+	"github.com/sclevine/spec/report"
+
+	. "github.com/jhvhs/gob-mock"
+	. "github.com/onsi/gomega"
 )
 
 func TestBashFunctions(t *testing.T) {
-	spec.Run(t, "Credhub Client", func(t *testing.T, when spec.G, it spec.S) {
+	spec.Run(t, "Bash Script Tests", func(t *testing.T, when spec.G, it spec.S) {
 		var bash *basher.Context
 		it.Before(func() {
 			RegisterTestingT(t)
@@ -22,37 +25,90 @@ func TestBashFunctions(t *testing.T) {
 			var err error
 			bash, err = basher.NewContext(getInternalBash(), true)
 			Expect(err).NotTo(HaveOccurred())
+
+			err = bash.Source("../scripts/script-under-test.bash", nil)
+			Expect(err).NotTo(HaveOccurred())
+
+			bash.CopyEnv()
+
+			bash.Stdout = gbytes.NewBuffer()
+			bash.Stderr = gbytes.NewBuffer()
 		})
 
-		// bash, _ := basher
-
-		when("Testing bash functions", func() {
-			it.Before(func() {
-				err := bash.Source("../scripts/script-under-test.bash", nil)
-				Expect(err).NotTo(HaveOccurred())
-			})
-
+		when("Testing pure bash functions", func() {
 			it("returns correctly", func() {
-				stdout := gbytes.NewBuffer()
-				stderr := gbytes.NewBuffer()
-
-				bash.Stdout = stdout
-				bash.Stderr = stderr
-
 				code, err := bash.Run("capitalize", []string{"hello", "world"})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(code).To(BeZero())
-				Expect(stdout).To(gbytes.Say("HELLO WORLD"))
-				Expect(stderr).To(gbytes.Say(""))
+				Expect(bash.Stdout).To(gbytes.Say("HELLO WORLD"))
+				Expect(bash.Stderr).To(gbytes.Say(""))
 
-				code, err = bash.Run("capitalize", nil)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(code).To(BeZero())
-				Expect(stdout).To(gbytes.Say(""))
-				Expect(stderr).To(gbytes.Say(""))
 			})
 		})
-	})
+
+		when("Testing a command that fails", func() {
+			it("fails", func() {
+				code, err := bash.Run("testStub", nil)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(code).NotTo(BeZero())
+			})
+
+			it("works when stubbed", func() {
+				mocks := []Gob{Stub("false")}
+				ApplyMocks(bash, mocks)
+
+				code, err := bash.Run("testStub", nil)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(code).To(BeZero())
+			})
+		})
+
+		when("Testing with spies", func() {
+			it("returns correctly with info", func() {
+				mocks := []Gob{Spy("cf")}
+				ApplyMocks(bash, mocks)
+
+				code, err := bash.Run("testSpies", []string{"-asdf", "this would fail if cf weren't stubbed"})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(code).To(BeZero())
+				Expect(bash.Stdout).To(gbytes.Say(""))
+				Expect(bash.Stderr).To(gbytes.Say("<1> cf version"))
+				Expect(bash.Stderr).To(gbytes.Say("<2> cf push -asdf this would fail if cf weren't stubbed"))
+			})
+
+			it("falls through when using SpyAndConditionallyCallThrough", func() {
+				mocks := []Gob{SpyAndConditionallyCallThrough("cf", `[ $1 == 'version' ]`)}
+				ApplyMocks(bash, mocks)
+
+				code, err := bash.Run("testSpies", []string{"-asdf", "this would fail if cf weren't stubbed"})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(code).To(BeZero())
+				Expect(bash.Stdout).To(gbytes.Say("cf version \\d+\\.\\d+\\.\\d+\\+.*"))
+				Expect(bash.Stderr).To(gbytes.Say("<1> cf version"))
+				Expect(bash.Stderr).To(gbytes.Say("<2> cf push -asdf this would fail if cf weren't stubbed"))
+			})
+		})
+
+		when("Testing with mocks", func() {
+			it("works with all types of mocks", func() {
+				mocks := []Gob{
+					Mock("cf", "echo 'No PCF for you bye bye'"),
+					MockOrCallThrough("bosh", "echo 'hello'", `[ $1 == '--version' ]`),
+				}
+				ApplyMocks(bash, mocks)
+
+				code, err := bash.Run("testMocks", nil)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(code).To(BeZero())
+				Expect(bash.Stdout).To(gbytes.Say("No PCF for you bye bye"))
+				Expect(bash.Stdout).To(gbytes.Say("version \\d+\\.\\d+\\.\\d+\\-.*"))
+				Expect(bash.Stdout).To(gbytes.Say("hello"))
+				Expect(bash.Stderr).To(gbytes.Say("<1> cf help"))
+				Expect(bash.Stderr).To(gbytes.Say("<2> bosh --version"))
+				Expect(bash.Stderr).To(gbytes.Say("<3> bosh envs"))
+			})
+		})
+	}, spec.Report(report.Terminal{}))
 }
 
 func getInternalBash() string {
