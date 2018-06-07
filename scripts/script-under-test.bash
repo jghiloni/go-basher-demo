@@ -9,6 +9,11 @@ function capitalize() {
   done
 }
 
+function readInput() {
+  input=$(cat)
+  echo $input
+}
+
 function testSpies() {
   echo $PATH
   cf version

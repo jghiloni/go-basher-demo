@@ -1,6 +1,7 @@
 package bash_test
 
 import (
+	"bytes"
 	"log"
 	"os"
 	"path"
@@ -86,6 +87,19 @@ func TestBashFunctions(t *testing.T) {
 				Expect(bash.Stdout).To(gbytes.Say("cf version \\d+\\.\\d+\\.\\d+\\+.*"))
 				Expect(bash.Stderr).To(gbytes.Say("<1> cf version"))
 				Expect(bash.Stderr).To(gbytes.Say("<2> cf push -asdf this would fail if cf weren't stubbed"))
+			})
+
+			it("falls through with stdin too", func() {
+				input := "input ... from the fuuuture!\n"
+				bash.Stdin = bytes.NewBuffer([]byte(input))
+				mocks := []Gob{SpyAndCallThrough("cat")}
+
+				ApplyMocks(bash, mocks)
+				code, err := bash.Run("readInput", nil)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(code).To(BeZero())
+				Expect(bash.Stdout).To(gbytes.Say(input))
+				Expect(bash.Stderr).To(gbytes.Say("<1> cat"))
 			})
 		})
 
