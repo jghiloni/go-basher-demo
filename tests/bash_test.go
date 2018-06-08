@@ -52,7 +52,7 @@ func TestBashFunctions(t *testing.T) {
 			RegisterTestingT(t)
 
 			var err error
-			bash, err = basher.NewContext(getInternalBash(), true)
+			bash, err = basher.NewContext(getInternalBash(), false)
 			Expect(err).NotTo(HaveOccurred())
 
 			err = bash.Source("../scripts/script-under-test.bash", nil)
