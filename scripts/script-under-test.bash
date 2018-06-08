@@ -14,6 +14,10 @@ function readInput() {
   echo $input
 }
 
+function convertToTitle() {
+  echo "this should be in title case" | make-title-case
+}
+
 function testSpies() {
   echo $PATH
   cf version

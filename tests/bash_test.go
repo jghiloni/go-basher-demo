@@ -2,10 +2,14 @@ package bash_test
 
 import (
 	"bytes"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
+	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/progrium/go-basher"
 
@@ -16,6 +20,30 @@ import (
 	. "github.com/jhvhs/gob-mock"
 	. "github.com/onsi/gomega"
 )
+
+func makeTitleCase(args []string) {
+	bytes, err := ioutil.ReadAll(os.Stdin)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	runes := []rune(strings.Trim(string(bytes), "\n"))
+	spacePrev := false
+	for i := range runes {
+
+		switch {
+		case unicode.IsLetter(runes[i]) && (i == 0 || spacePrev):
+			runes[i] = unicode.ToUpper(runes[i])
+			spacePrev = false
+		case unicode.IsSpace(runes[i]):
+			spacePrev = true
+		default:
+			spacePrev = false
+		}
+	}
+
+	fmt.Println(string(runes))
+}
 
 func TestBashFunctions(t *testing.T) {
 	spec.Run(t, "Bash Script Tests", func(t *testing.T, when spec.G, it spec.S) {
@@ -44,6 +72,19 @@ func TestBashFunctions(t *testing.T) {
 				Expect(bash.Stdout).To(gbytes.Say("HELLO WORLD"))
 				Expect(bash.Stderr).To(gbytes.Say(""))
 
+			})
+		})
+
+		when("Using a go func in Bash", func() {
+			it("runs correctly", func() {
+				bash.ExportFunc("make-title-case", makeTitleCase)
+				if bash.HandleFuncs(os.Args) {
+					os.Exit(0)
+				}
+				code, err := bash.Run("convertToTitle", nil)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(code).To(BeZero())
+				Expect(bash.Stdout).To(gbytes.Say("This Should Be In Title Case"))
 			})
 		})
 
